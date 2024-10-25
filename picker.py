@@ -178,6 +178,12 @@ async def analyze_symbol(
         remain_to_bottom_percent = ((current_price - real_min_price) / range_price) * 100
         remain_to_top_percent = ((real_max_price - current_price) / range_price) * 100
 
+
+        if args.long and remain_to_bottom_percent > remain_to_top_percent:
+            return None
+        if args.short and remain_to_top_percent > remain_to_bottom_percent:
+            return None
+
         return SymbolAnalysisResult(
             symbol=symbol,
             change_percent=change_percent,
@@ -274,13 +280,23 @@ async def main(args: argparse.Namespace):
                     progress.advance(task)
 
 
-            # TOP N Limit for each category
-            top_count = args.count
-
-            # Sort results by change_percent
-            final_results = sorted(results, key=lambda x: min(x.remain_to_bottom_percent, x.remain_to_top_percent), reverse=False)
-            # Trim the list to top N
-            final_results = final_results[:top_count]
+            if args.long or args.short:
+                # TOP N Limit for each category
+                top_count = args.count
+                # Sort results by change_percent
+                final_results = sorted(results, key=lambda x: min(x.remain_to_bottom_percent, x.remain_to_top_percent), reverse=False)
+                # Trim the list to top N
+                final_results = final_results[:top_count]
+            else:
+                top_short_count = int(args.count // 2)
+                top_long_count = top_short_count
+                # Sort results by change_percent
+                final_results_short = sorted([x for x in results if x.remain_to_top_percent < x.remain_to_bottom_percent], key=lambda x: x.remain_to_top_percent, reverse=False)
+                final_results_long = sorted([x for x in results if x.remain_to_bottom_percent < x.remain_to_top_percent], key=lambda x: x.remain_to_bottom_percent, reverse=False)
+                # Trim the list to top N
+                final_results_short = final_results_short[:top_short_count]
+                final_results_long = final_results_long[:top_long_count]
+                final_results = final_results_short + final_results_long
 
             # Create table
             table = create_table(final_results, start_time, args)
@@ -298,11 +314,13 @@ if __name__ == '__main__':
     parser.add_argument('--interval', type=str, default="15m", help='Timeframe for price analysis (e.g. 15m, 1h, 4h, 1d)')
     parser.add_argument('--range', type=str, default="6h", help='Time range for price analysis (e.g. 4h, 1d, 3d)')
     parser.add_argument('--watch', action='store_true', help='Continuous monitoring mode')
-    # Highlight change percent
     parser.add_argument('--highlight', type=str, default='15%', help='Highlight change percent')
     parser.add_argument('--threshold', type=str, default="2%", help='Price threshold, by default filter everything without 2% price change in the range')
     parser.add_argument('--wait', type=int, default=30, help='Interval for continuous monitoring mode')
-    parser.add_argument('--count', type=int, default=12, help='Number of top symbols to display')
+    parser.add_argument('--count', type=int, default=10, help='Number of top symbols to display')
+    parser.add_argument('--long', action='store_true', default=False, help='Filter only symbols for long positions')
+    parser.add_argument('--short', action='store_true', default=False, help='Filter only symbols for short positions')
+
     args = parser.parse_args()
 
     args.max_concurrency = MAX_CONCURRENCY
