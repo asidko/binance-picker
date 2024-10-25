@@ -221,8 +221,8 @@ def create_table(results: List[SymbolAnalysisResult], last_updated: str, args: a
         remain_to_bottom_percent = res.remain_to_bottom_percent
         remain_to_top_percent = res.remain_to_top_percent
         time_start = res.time_start.strftime("%d.%m %H:%M")
-        is_close_remaining_short = remain_to_top_percent < 10
-        is_close_remaining_long = remain_to_bottom_percent < 10
+        is_close_remaining_short = remain_to_top_percent < args.highlight
+        is_close_remaining_long = remain_to_bottom_percent < args.highlight
         is_not_close = not is_close_remaining_short and not is_close_remaining_long
 
         symbol_display = f"{symbol}" if is_not_close else f"[bold][red]{symbol}[/red][/bold]" if is_close_remaining_short else f"[bold][green]{symbol}[/green][bold]"
@@ -278,7 +278,7 @@ async def main(args: argparse.Namespace):
             top_count = args.count
 
             # Sort results by change_percent
-            final_results = sorted(results, key=lambda x: x.change_percent, reverse=True)
+            final_results = sorted(results, key=lambda x: min(x.remain_to_bottom_percent, x.remain_to_top_percent), reverse=False)
             # Trim the list to top N
             final_results = final_results[:top_count]
 
@@ -298,6 +298,8 @@ if __name__ == '__main__':
     parser.add_argument('--interval', type=str, default="15m", help='Timeframe for price analysis (e.g. 15m, 1h, 4h, 1d)')
     parser.add_argument('--range', type=str, default="6h", help='Time range for price analysis (e.g. 4h, 1d, 3d)')
     parser.add_argument('--watch', action='store_true', help='Continuous monitoring mode')
+    # Highlight change percent
+    parser.add_argument('--highlight', type=str, default='15%', help='Highlight change percent')
     parser.add_argument('--threshold', type=str, default="2%", help='Price threshold, by default filter everything without 2% price change in the range')
     parser.add_argument('--wait', type=int, default=30, help='Interval for continuous monitoring mode')
     parser.add_argument('--count', type=int, default=12, help='Number of top symbols to display')
@@ -306,6 +308,7 @@ if __name__ == '__main__':
     args.max_concurrency = MAX_CONCURRENCY
     args.interval = normalize_timeframe_label(args.interval)
     args.threshold = parse_percentage(args.threshold)
+    args.highlight = parse_percentage(args.highlight)
 
     try:
         asyncio.run(main(args))
